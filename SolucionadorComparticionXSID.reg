@@ -1,7 +1,10 @@
-; El siguiente fichero modifica el registro para que equipos Windows 11 con el mismo SID puedan compartir ficheros. Esta solución se ha hecho a raíz de unas actualizaciones de Microsoft que hace que no permita la compartición
+; El siguiente fichero modifica el registro para que equipos Windows 11 con el 
+; mismo SID puedan compartir ficheros. Esta solución se ha hecho a raíz de unas 
+; actualizaciones de Microsoft que hace que no permita la compartición
 Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Policies\Microsoft\FeatureManagement\Overrides]
 "1517186191"=dword:00000000
+
 
 
