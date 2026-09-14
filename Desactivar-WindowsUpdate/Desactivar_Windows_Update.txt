@@ -1,0 +1,61 @@
+@echo off
+:: Desactivar por completo Windows Update en Windows 11, aunque esto no es una buena practica, puede ser util, por lo que no lo recomiendo a menos que sea indespensable usarlo, es una brecha de seguridad
+:: Necesita ejecutarse como Administrador
+
+:: ---- Comprueba privilegios ----
+net session >nul 2>&1
+if %errorlevel% NEQ 0 (
+  echo [!] Este script necesita privilegios de Administrador. Cierra y ejecútalo como Administrador.
+  pause
+  exit /b 1
+)
+
+echo.
+echo === Deteniendo servicios de actualizaciones ===
+for %%S in (wuauserv bits dosvc usosvc) do (
+  sc stop %%S >nul 2>&1
+)
+
+echo.
+echo === Deshabilitando servicios de actualizaciones ===
+sc config wuauserv start= disabled >nul 2>&1
+sc config bits start= disabled >nul 2>&1
+sc config dosvc start= disabled >nul 2>&1
+sc config usosvc start= disabled >nul 2>&1
+
+echo.
+echo === Intentando deshabilitar Windows Update Medic (WaaSMedicSvc) ===
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\WaaSMedicSvc" /v Start /t REG_DWORD /d 4 /f >nul 2>&1
+
+echo.
+echo === Aplicando directivas para bloquear actualizaciones automáticas ===
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate" /f >nul 2>&1
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /v NoAutoUpdate /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /v AUOptions /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /v ScheduledInstallDay /t REG_DWORD /d 0 /f >nul 2>&1
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /v ScheduledInstallTime /t REG_DWORD /d 0 /f >nul 2>&1
+
+echo.
+echo === Deshabilitando tareas programadas de Windows Update ===
+:: WindowsUpdate
+schtasks /Change /TN "\Microsoft\Windows\WindowsUpdate\Scheduled Start" /Disable >nul 2>&1
+schtasks /Change /TN "\Microsoft\Windows\WindowsUpdate\AUFirmwareInstall" /Disable >nul 2>&1
+schtasks /Change /TN "\Microsoft\Windows\WindowsUpdate\Automatic App Update" /Disable >nul 2>&1
+
+for %%T in ("Schedule Scan" "Schedule Scan Static Task" "UpdateModelTask" "USO_UxBroker_ReadyToReboot" "Reboot" "Reboot_AC" "Resume On Boot" "Maintenance Install" "MusUx_UpdateInterval") do (
+  schtasks /Change /TN "\Microsoft\Windows\UpdateOrchestrator\%%~T" /Disable >nul 2>&1
+)
+
+schtasks /Change /TN "\Microsoft\Windows\Servicing\Sih" /Disable >nul 2>&1
+schtasks /Change /TN "\Microsoft\Windows\Servicing\SihBoot" /Disable >nul 2>&1
+
+echo.
+echo === Limpiando cola de descargas de Windows Update ===
+net stop wuauserv >nul 2>&1
+net stop bits >nul 2>&1
+ren "%SystemRoot%\SoftwareDistribution" "SoftwareDistribution.old" >nul 2>&1
+ren "%SystemRoot%\System32\catroot2" "catroot2.old" >nul 2>&1
+
+echo.
+echo [OK] Windows Update ha sido desactivado. Reinicia el equipo para aplicar todos los cambios.
+pause

@@ -1,0 +1,61 @@
+@echo off
+:: Re-activar Windows Update en Windows 11 (revertir bloqueos)
+:: Necesita ejecutarse como Administrador
+
+:: ---- Comprobación de privilegios ----
+net session >nul 2>&1
+if %errorlevel% NEQ 0 (
+  echo [!] Este script necesita privilegios de Administrador. Cierra y ejecútalo como Administrador.
+  pause
+  exit /b 1
+)
+
+echo.
+echo === Rehabilitando servicios de actualizaciones ===
+sc config bits start= delayed-auto >nul 2>&1
+sc config wuauserv start= demand >nul 2>&1
+sc config dosvc start= demand >nul 2>&1
+sc config usosvc start= demand >nul 2>&1
+
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\WaaSMedicSvc" /v Start /t REG_DWORD /d 3 /f >nul 2>&1
+
+echo.
+echo === Rehabilitando tareas programadas ===
+:: WindowsUpdate
+schtasks /Change /TN "\Microsoft\Windows\WindowsUpdate\Scheduled Start" /Enable >nul 2>&1
+schtasks /Change /TN "\Microsoft\Windows\WindowsUpdate\AUFirmwareInstall" /Enable >nul 2>&1
+schtasks /Change /TN "\Microsoft\Windows\WindowsUpdate\Automatic App Update" /Enable >nul 2>&1
+
+for %%T in ("Schedule Scan" "Schedule Scan Static Task" "UpdateModelTask" "USO_UxBroker_ReadyToReboot" "Reboot" "Reboot_AC" "Resume On Boot" "Maintenance Install" "MusUx_UpdateInterval") do (
+  schtasks /Change /TN "\Microsoft\Windows\UpdateOrchestrator\%%~T" /Enable >nul 2>&1
+)
+
+schtasks /Change /TN "\Microsoft\Windows\Servicing\Sih" /Enable >nul 2>&1
+schtasks /Change /TN "\Microsoft\Windows\Servicing\SihBoot" /Enable >nul 2>&1
+
+echo.
+echo === Quitando directivas de bloqueo de actualizaciones ===
+reg delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /v NoAutoUpdate /f >nul 2>&1
+reg delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /v AUOptions /f >nul 2>&1
+reg delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /v ScheduledInstallDay /f >nul 2>&1
+reg delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /v ScheduledInstallTime /f >nul 2>&1
+
+reg delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /f >nul 2>&1
+reg delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate" /f >nul 2>&1
+
+echo.
+echo === Reiniciando servicios ===
+net start bits >nul 2>&1
+net start wuauserv >nul 2>&1
+net start dosvc >nul 2>&1
+net start usosvc >nul 2>&1
+net start WaaSMedicSvc >nul 2>&1
+
+echo.
+echo === Lanzando una busqueda de actualizaciones (puede tardar) ===
+:: USOClient puede no mostrar salida; es normal.
+%SystemRoot%\System32\UsoClient.exe StartScan >nul 2>&1
+
+echo.
+echo [OK] Windows Update reactivado. Abre Configuracion > Windows Update para comprobar.
+pause
